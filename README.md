@@ -26,6 +26,45 @@ Options:
 - `--model <name>` — Model name (defaults: `gpt-4o-mini` / `claude-haiku-3` / `llama3.2`)
 - `--dry-run` — Print ADR to stdout without writing a file
 - `--token <token>` — GitHub token (or set `GITHUB_TOKEN` env var)
+- `--template <file>` — Render the generated output with a custom markdown template
+- `--jira` — Extract JIRA tickets from commit messages and append a `Related Issues` section
+- `--jira-url <base>` — JIRA base URL (defaults to `JIRA_URL` env var)
+
+### Custom templates
+
+`--template` accepts a markdown file with simple mustache-style placeholders:
+
+- `{{summary}}`
+- `{{changes}}`
+- `{{files_changed}}`
+- `{{insertions}}`
+- `{{deletions}}`
+- `{{breaking_changes}}`
+- `{{commits}}`
+
+It also supports simple conditional blocks:
+
+```md
+{{#if breaking_changes}}
+## Breaking Changes
+{{breaking_changes}}
+{{/if}}
+```
+
+Example:
+
+```bash
+pr-narrative generate --pr 234 --repo owner/repo --template .github/pr-template.md
+```
+
+### JIRA references
+
+When `--jira` is enabled, commit messages are scanned for ticket keys like `PROJ-123` and appended as a `Related Issues` section.
+
+```bash
+export JIRA_URL=https://your-jira.atlassian.net
+pr-narrative generate --pr 234 --repo owner/repo --jira
+```
 
 ### Initialize config
 
@@ -54,6 +93,7 @@ Create `pr-narrative.config.json`:
 - `OPENAI_API_KEY` — Required for OpenAI provider
 - `ANTHROPIC_API_KEY` — Required for Anthropic provider
 - `GITHUB_TOKEN` — GitHub personal access token
+- `JIRA_URL` — Default JIRA base URL for `--jira-url`
 
 ## Providers
 

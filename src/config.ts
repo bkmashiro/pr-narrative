@@ -8,6 +8,7 @@ export interface Config {
   model?: string
   out?: string
   githubToken?: string
+  jiraUrl?: string
 }
 
 export const DEFAULT_CONFIG: Required<Pick<Config, 'provider' | 'out'>> = {

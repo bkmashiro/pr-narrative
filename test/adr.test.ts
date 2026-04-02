@@ -179,3 +179,54 @@ test('generateADR dry-run returns content without writing a file', async () => {
     await rm(outDir, { recursive: true, force: true })
   }
 })
+
+test('generateADR renders a custom template with computed variables', async () => {
+  const outDir = await mkdtemp(join(tmpdir(), 'pr-narrative-adr-template-'))
+
+  try {
+    const result = await generateADR(ctx, llm, {
+      outDir,
+      dryRun: true,
+      template: `## Summary
+{{summary}}
+
+## Changes
+{{changes}}
+
+## Stats
+- Files: {{files_changed}}
+- +{{insertions}} / -{{deletions}}
+
+{{#if breaking_changes}}## Breaking Changes
+{{breaking_changes}}
+{{/if}}`,
+    })
+
+    assert.match(result.content, /^## Summary/m)
+    assert.match(result.content, /Token refreshes were failing intermittently/)
+    assert.match(result.content, /- src\/auth.ts \(modified, \+10\/-2\)/)
+    assert.match(result.content, /- Files: 1/)
+    assert.doesNotMatch(result.content, /## Breaking Changes/)
+  } finally {
+    await rm(outDir, { recursive: true, force: true })
+  }
+})
+
+test('generateADR appends a related issues section when jira tickets are supplied', async () => {
+  const outDir = await mkdtemp(join(tmpdir(), 'pr-narrative-adr-jira-'))
+
+  try {
+    const result = await generateADR(ctx, llm, {
+      outDir,
+      dryRun: true,
+      jiraTickets: ['PROJ-123', 'PROJ-456'],
+      jiraBaseUrl: 'https://example.atlassian.net/',
+    })
+
+    assert.match(result.content, /^## Related Issues/m)
+    assert.match(result.content, /\[PROJ-123\]\(https:\/\/example\.atlassian\.net\/browse\/PROJ-123\)/)
+    assert.match(result.content, /\[PROJ-456\]\(https:\/\/example\.atlassian\.net\/browse\/PROJ-456\)/)
+  } finally {
+    await rm(outDir, { recursive: true, force: true })
+  }
+})

@@ -2,7 +2,9 @@ import { readdir, writeFile, mkdir } from 'fs/promises'
 import { existsSync } from 'fs'
 import { join } from 'path'
 import type { PRContext } from './github.js'
+import { buildJiraSection } from './jira.js'
 import type { LLMProvider } from './llm.js'
+import { buildTemplateVariables, renderTemplate } from './template.js'
 
 export function slugify(title: string): string {
   return title
@@ -127,6 +129,9 @@ ${implNotes}
 export interface GenerateADROptions {
   outDir: string
   dryRun?: boolean
+  template?: string
+  jiraTickets?: string[]
+  jiraBaseUrl?: string
 }
 
 export async function generateADR(
@@ -139,7 +144,13 @@ export async function generateADR(
 
   const date = new Date().toISOString().split('T')[0] ?? new Date().toDateString()
   const number = await getNextADRNumber(options.outDir)
-  const content = buildADR(number, ctx, llmText, date)
+  const baseContent = options.template
+    ? renderTemplate(options.template, {
+        ...buildTemplateVariables(ctx, llmText),
+      })
+    : buildADR(number, ctx, llmText, date)
+  const jiraSection = buildJiraSection(options.jiraTickets ?? [], options.jiraBaseUrl)
+  const content = jiraSection ? `${baseContent.trimEnd()}\n\n${jiraSection}\n` : baseContent
   const slug = slugify(ctx.title)
   const filename = `${number}-${slug}.md`
   const filePath = join(options.outDir, filename)

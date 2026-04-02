@@ -2,13 +2,14 @@
 
 import { Command } from 'commander'
 import { execSync } from 'child_process'
-import { writeFile } from 'fs/promises'
+import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { resolveConfig, type Config } from './config.js'
 import { fetchPRContext } from './github.js'
 import { createProvider } from './llm.js'
 import { generateADR } from './adr.js'
 import { log } from './formatter.js'
+import { extractJiraTickets } from './jira.js'
 
 const program = new Command()
 
@@ -27,6 +28,9 @@ program
   .option('--model <name>', 'Model name')
   .option('--dry-run', 'Print ADR to stdout, do not write file')
   .option('--token <token>', 'GitHub token (or GITHUB_TOKEN env)')
+  .option('--template <file>', 'Custom markdown template file')
+  .option('--jira', 'Extract JIRA tickets from commit messages')
+  .option('--jira-url <base>', 'JIRA base URL (or JIRA_URL env)')
   .action(async (opts: {
     pr: number
     repo?: string
@@ -35,6 +39,9 @@ program
     model?: string
     dryRun?: boolean
     token?: string
+    template?: string
+    jira?: boolean
+    jiraUrl?: string
   }) => {
     try {
       const config = await resolveConfig({
@@ -80,18 +87,39 @@ program
       log.step(`🔍 Fetching PR #${opts.pr}...`)
       const ctx = await fetchPRContext(owner, repoName, opts.pr, token)
 
+      const template = opts.template
+        ? await readFile(opts.template, 'utf-8')
+        : undefined
+      if (opts.template) {
+        log.info(`Using custom template: ${opts.template}`)
+      }
+
+      const jiraTickets = opts.jira
+        ? extractJiraTickets(ctx.commits.map(commit => commit.message))
+        : []
+      const jiraBaseUrl = opts.jiraUrl ?? process.env['JIRA_URL']
+      if (opts.jira && jiraTickets.length > 0) {
+        log.info(`Detected JIRA tickets: ${jiraTickets.join(', ')}`)
+      }
+
       log.step('📝 Generating ADR...')
       const llm = createProvider(provider, model)
 
       const result = await generateADR(ctx, llm, {
         outDir,
         dryRun: opts.dryRun,
+        template,
+        jiraTickets,
+        jiraBaseUrl,
       })
 
       if (opts.dryRun) {
         console.log('\n' + result.content)
       } else {
         log.success(`Written: ${result.filePath}`)
+        if (template) {
+          log.success('Generated ADR with custom format.')
+        }
       }
     } catch (err) {
       if (err instanceof Error) {
@@ -114,6 +142,7 @@ program
       model: 'gpt-4o-mini',
       out: 'docs/decisions/',
       githubToken: '',
+      jiraUrl: '',
     }
     await writeFile(configPath, JSON.stringify(defaultConfig, null, 2) + '\n', 'utf-8')
     log.success(`Created ${configPath}`)
