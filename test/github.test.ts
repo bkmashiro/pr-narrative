@@ -5,6 +5,9 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
   fetchPRContext,
+  extractCommits,
+  extractFiles,
+  MAX_DIFF_LENGTH,
   truncateDiff,
   filterReviewComments,
   extractReviews,
@@ -105,4 +108,89 @@ test('extractReviews includes author information from reviews', async () => {
       { author: 'reviewer3', state: 'COMMENTED' },
     ]
   )
+})
+
+test('extractFiles omits patches that are fully truncated out of the combined diff', () => {
+  const files = extractFiles([
+    {
+      filename: 'src/first.ts',
+      status: 'modified',
+      additions: 1,
+      deletions: 0,
+      patch: 'a'.repeat(5000),
+    },
+    {
+      filename: 'src/middle.ts',
+      status: 'modified',
+      additions: 1,
+      deletions: 0,
+      patch: 'b'.repeat(50),
+    },
+    {
+      filename: 'src/last.ts',
+      status: 'modified',
+      additions: 1,
+      deletions: 0,
+      patch: 'c'.repeat(5000),
+    },
+  ])
+
+  assert.ok((files[0]?.patch?.length ?? 0) > 0)
+  assert.equal(files[1]?.patch, undefined)
+  assert.ok((files[2]?.patch?.length ?? 0) > 0)
+})
+
+test('extractCommits falls back to author login and unknown when author names are absent', () => {
+  const commits = extractCommits([
+    {
+      sha: 'abc123',
+      commit: { message: 'Use login fallback', author: null },
+      author: { login: 'octocat' },
+    },
+    {
+      sha: 'def456',
+      commit: { message: 'Use unknown fallback', author: null },
+      author: null,
+    },
+  ])
+
+  assert.deepEqual(
+    commits.map(commit => commit.author),
+    ['octocat', 'unknown']
+  )
+})
+
+test('fetchPRContext fills missing optional PR fields with safe defaults', async () => {
+  const fixture = await loadFixture()
+  const ctx = await fetchPRContext(
+    'acme',
+    'pr-narrative',
+    42,
+    undefined,
+    createMockClient({
+      ...fixture,
+      pr: {
+        ...fixture.pr,
+        body: null,
+        merged_at: null,
+        user: null,
+      },
+      reviewComments: [
+        { body: 'Looks good', path: 'src/auth.ts' },
+      ],
+      reviews: [
+        { state: 'COMMENTED', body: null },
+      ],
+    })
+  )
+
+  assert.equal(ctx.body, '')
+  assert.equal(ctx.author, 'unknown')
+  assert.equal(ctx.mergedAt, null)
+  assert.deepEqual(ctx.reviewComments, [
+    { author: 'unknown', body: 'Looks good', path: 'src/auth.ts', line: null },
+  ])
+  assert.deepEqual(ctx.reviews, [
+    { author: 'unknown', state: 'COMMENTED', body: '' },
+  ])
 })

@@ -27,18 +27,40 @@ export function extractFiles(
   files: Array<{ filename: string; status: string; additions: number; deletions: number; patch?: string }>
 ): PRContext['files'] {
   const totalDiff = files.map(file => file.patch ?? '').join('\n')
-  const truncatedDiff = truncateDiff(totalDiff)
+  if (truncateDiff(totalDiff) === totalDiff) {
+    return files.map(file => ({
+      filename: file.filename,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      patch: file.patch ?? '',
+    }))
+  }
+
+  const half = MAX_DIFF_LENGTH / 2
+  const tailStart = Math.max(totalDiff.length - half, 0)
   let offset = 0
 
   return files.map(file => {
     const patch = file.patch ?? ''
-    const nextOffset = offset + patch.length
-    const visiblePatch =
-      truncatedDiff === totalDiff
-        ? patch
-        : truncatedDiff.slice(offset, Math.min(nextOffset, truncatedDiff.length)) || undefined
+    const start = offset
+    const end = start + patch.length
 
-    offset = nextOffset + 1
+    const headVisible =
+      start < half
+        ? patch.slice(0, Math.max(Math.min(end, half) - start, 0))
+        : ''
+    const tailVisible =
+      end > tailStart
+        ? patch.slice(Math.max(tailStart - start, 0))
+        : ''
+
+    const visiblePatch =
+      headVisible && tailVisible && headVisible.length + tailVisible.length < patch.length
+        ? `${headVisible}\n... [truncated] ...\n${tailVisible}`
+        : headVisible || tailVisible || undefined
+
+    offset = end + 1
 
     return {
       filename: file.filename,

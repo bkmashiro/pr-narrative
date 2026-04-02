@@ -3,7 +3,14 @@ import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, basename } from 'node:path'
-import { generateADR, getNextADRNumber, slugify } from '../src/adr.ts'
+import {
+  buildADR,
+  buildPrompt,
+  generateADR,
+  getNextADRNumber,
+  parseSection,
+  slugify,
+} from '../src/adr.ts'
 import type { PRContext } from '../src/github.ts'
 
 const ctx: PRContext = {
@@ -99,6 +106,75 @@ test('generateADR formats the ADR date as YYYY-MM-DD', async () => {
   try {
     const result = await generateADR(ctx, llm, { outDir })
     assert.match(result.content, /^Date: \d{4}-\d{2}-\d{2}$/m)
+  } finally {
+    await rm(outDir, { recursive: true, force: true })
+  }
+})
+
+test('getNextADRNumber returns 0001 when the output directory does not exist', async () => {
+  const parentDir = await mkdtemp(join(tmpdir(), 'pr-narrative-missing-parent-'))
+  const outDir = join(parentDir, 'missing')
+
+  try {
+    assert.equal(await getNextADRNumber(outDir), '0001')
+  } finally {
+    await rm(parentDir, { recursive: true, force: true })
+  }
+})
+
+test('buildPrompt falls back to none placeholders when PR context sections are empty', () => {
+  const prompt = buildPrompt({
+    ...ctx,
+    body: '',
+    files: [],
+    commits: [],
+    reviewComments: [],
+  })
+
+  assert.match(prompt, /PR Description: \(none\)/)
+  assert.match(prompt, /Changed Files Summary:\n\(none\)/)
+  assert.match(prompt, /Key Commits:\n\(none\)/)
+  assert.match(prompt, /Review Comments \(discussion\):\n\(none\)/)
+})
+
+test('parseSection supports bold heading format', () => {
+  const text = `**Context**
+Problem statement.
+
+**Decision**
+Chosen approach.`
+
+  assert.equal(parseSection(text, 'Context'), 'Problem statement.')
+  assert.equal(parseSection(text, 'Decision'), 'Chosen approach.')
+})
+
+test('buildADR falls back to PR-derived placeholders and filters reviewers', () => {
+  const content = buildADR(
+    '0007',
+    {
+      ...ctx,
+      author: 'alice',
+      reviews: [{ author: 'alice', state: 'APPROVED', body: '' }],
+      reviewComments: [{ author: 'unknown', body: 'Needs tests.', path: 'src/auth.ts', line: null }],
+    },
+    'Unstructured summary without headings',
+    '2026-04-02'
+  )
+
+  assert.match(content, /\(see PR description\)/)
+  assert.match(content, /\(see review comments\)/)
+  assert.match(content, /\(see diff\)/)
+  assert.match(content, /Reviewers: \(none\)/)
+})
+
+test('generateADR dry-run returns content without writing a file', async () => {
+  const outDir = await mkdtemp(join(tmpdir(), 'pr-narrative-adr-dry-run-'))
+
+  try {
+    const result = await generateADR(ctx, llm, { outDir, dryRun: true })
+
+    assert.equal(result.filePath, null)
+    await assert.rejects(() => readFile(join(outDir, '0001-fix-auth-token-handling.md'), 'utf-8'))
   } finally {
     await rm(outDir, { recursive: true, force: true })
   }

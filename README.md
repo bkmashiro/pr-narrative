@@ -1,3 +1,5 @@
+[![npm](https://img.shields.io/npm/v/pr-narrative)](https://www.npmjs.com/package/pr-narrative) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 # pr-narrative
 
 Turn your PR history into Architecture Decision Records (ADRs) automatically.
