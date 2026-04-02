@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from 'commander'
-import { execSync } from 'child_process'
+import { execFileSync } from 'child_process'
 import { readFile, writeFile } from 'fs/promises'
 import { join } from 'path'
 import { resolveConfig, type Config } from './config.js'
@@ -10,13 +10,82 @@ import { createProvider } from './llm.js'
 import { generateADR } from './adr.js'
 import { log } from './formatter.js'
 import { extractJiraTickets } from './jira.js'
+import {
+  buildGitLogFormat,
+  buildReleaseNotes,
+  formatReleaseNotes,
+  parseGitLog,
+  prependReleaseNotesToChangelog,
+} from './release-notes.js'
 
 const program = new Command()
 
 program
   .name('pr-narrative')
   .description('Turn your PR history into ADRs automatically')
-  .version('0.1.0')
+  .version('0.2.0')
+  .option('--release-notes', 'Generate release notes from a git commit range')
+  .option('--changelog', 'Prepend generated release notes to CHANGELOG.md')
+  .option('--from <ref>', 'Starting git ref (exclusive) for release notes')
+  .option('--to <ref>', 'Ending git ref (inclusive) for release notes', 'HEAD')
+  .action(async (opts: {
+    releaseNotes?: boolean
+    changelog?: boolean
+    from?: string
+    to: string
+  }) => {
+    if (!opts.releaseNotes && !opts.changelog) {
+      program.help()
+    }
+
+    if (opts.releaseNotes && opts.changelog) {
+      log.error('Choose either --release-notes or --changelog')
+      process.exit(1)
+    }
+
+    if (!opts.from) {
+      log.error('Use --from <ref> to define the git range start')
+      process.exit(1)
+    }
+
+    try {
+      const rawLog = execFileSync(
+        'git',
+        ['log', `${opts.from}..${opts.to}`, `--format=${buildGitLogFormat()}`],
+        { encoding: 'utf-8' }
+      )
+      const commits = parseGitLog(rawLog)
+      const notes = formatReleaseNotes(buildReleaseNotes(commits, opts.to))
+
+      if (opts.releaseNotes) {
+        process.stdout.write(notes)
+        return
+      }
+
+      log.step('Prepending release notes to CHANGELOG.md...')
+      const changelogPath = join(process.cwd(), 'CHANGELOG.md')
+      let existingContent = ''
+
+      try {
+        existingContent = await readFile(changelogPath, 'utf-8')
+      } catch (error) {
+        const nodeError = error as NodeJS.ErrnoException
+        if (nodeError.code !== 'ENOENT') {
+          throw error
+        }
+      }
+
+      await writeFile(changelogPath, prependReleaseNotesToChangelog(existingContent, notes), 'utf-8')
+      log.success('Updated CHANGELOG.md')
+    } catch (err) {
+      if (err instanceof Error) {
+        log.error(err.message)
+      } else {
+        log.error(String(err))
+      }
+      process.exit(1)
+    }
+  })
 
 program
   .command('generate')
@@ -56,7 +125,7 @@ program
       let repo = opts.repo ?? config.repo
       if (!repo) {
         try {
-          const remoteUrl = execSync('git remote get-url origin', { encoding: 'utf-8' }).trim()
+          const remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { encoding: 'utf-8' }).trim()
           // Handle both https and ssh formats
           const httpsMatch = remoteUrl.match(/github\.com[/:](.+?\/.+?)(?:\.git)?$/)
           if (httpsMatch?.[1]) {

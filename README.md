@@ -12,6 +12,33 @@ npm install -g pr-narrative
 
 ## Usage
 
+### Generate release notes from a commit range
+
+```bash
+pr-narrative --release-notes --from v1.0.0 --to v1.1.0
+```
+
+Options:
+- `--release-notes` — Generate release notes markdown from a git range
+- `--from <ref>` — Starting git ref, tag, or commit (required)
+- `--to <ref>` — Ending git ref, tag, or commit (default: `HEAD`)
+
+Commit subjects are grouped by conventional commit prefix:
+- `feat` → `New Features`
+- `fix` → `Bug Fixes`
+- `perf`, `chore`, and uncategorized commits → `Improvements`
+- `deps` → `Dependencies`
+
+PR references like `#123` are extracted from commit messages and appended to each bullet when present.
+
+### Update CHANGELOG.md
+
+```bash
+pr-narrative --changelog --from v1.0.0 --to v1.1.0
+```
+
+This generates the same release notes markdown and prepends it to `CHANGELOG.md`.
+
 ### Generate an ADR from a PR
 
 ```bash
