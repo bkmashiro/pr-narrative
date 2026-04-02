@@ -15,19 +15,110 @@ export interface PRContext {
   reviews: Array<{ author: string; state: string; body: string }>
 }
 
-function truncateDiff(diff: string, maxLength: number = 8000): string {
+export const MAX_DIFF_LENGTH = 8000
+
+export function truncateDiff(diff: string, maxLength: number = MAX_DIFF_LENGTH): string {
   if (diff.length <= maxLength) return diff
   const half = maxLength / 2
   return diff.slice(0, half) + '\n... [truncated] ...\n' + diff.slice(diff.length - half)
+}
+
+export function extractFiles(
+  files: Array<{ filename: string; status: string; additions: number; deletions: number; patch?: string }>
+): PRContext['files'] {
+  const totalDiff = files.map(file => file.patch ?? '').join('\n')
+  const truncatedDiff = truncateDiff(totalDiff)
+  let offset = 0
+
+  return files.map(file => {
+    const patch = file.patch ?? ''
+    const nextOffset = offset + patch.length
+    const visiblePatch =
+      truncatedDiff === totalDiff
+        ? patch
+        : truncatedDiff.slice(offset, Math.min(nextOffset, truncatedDiff.length)) || undefined
+
+    offset = nextOffset + 1
+
+    return {
+      filename: file.filename,
+      status: file.status,
+      additions: file.additions,
+      deletions: file.deletions,
+      patch: visiblePatch,
+    }
+  })
+}
+
+export function extractCommits(
+  commits: Array<{
+    sha: string
+    commit: { message: string; author?: { name?: string | null } | null }
+    author?: { login?: string | null } | null
+  }>
+): PRContext['commits'] {
+  return commits.map(commit => ({
+    sha: commit.sha,
+    message: commit.commit.message,
+    author: commit.commit.author?.name ?? commit.author?.login ?? 'unknown',
+  }))
+}
+
+export function filterReviewComments(
+  comments: Array<{
+    user?: { login?: string | null } | null
+    body: string
+    path: string
+    line?: number | null
+  }>
+): PRContext['reviewComments'] {
+  return comments
+    .filter(comment => comment.body.trim().length > 0)
+    .map(comment => ({
+      author: comment.user?.login ?? 'unknown',
+      body: comment.body,
+      path: comment.path,
+      line: comment.line ?? null,
+    }))
+}
+
+export function extractReviews(
+  reviews: Array<{
+    user?: { login?: string | null } | null
+    state: string
+    body?: string | null
+  }>
+): PRContext['reviews'] {
+  return reviews.map(review => ({
+    author: review.user?.login ?? 'unknown',
+    state: review.state,
+    body: review.body ?? '',
+  }))
+}
+
+interface GitHubClient {
+  pulls: {
+    get(args: { owner: string; repo: string; pull_number: number }): Promise<{ data: any }>
+    listFiles(args: { owner: string; repo: string; pull_number: number; per_page: number }): Promise<{ data: any[] }>
+    listCommits(args: { owner: string; repo: string; pull_number: number; per_page: number }): Promise<{ data: any[] }>
+    listReviewComments(args: {
+      owner: string
+      repo: string
+      pull_number: number
+      per_page: number
+    }): Promise<{ data: any[] }>
+    listReviews(args: { owner: string; repo: string; pull_number: number; per_page: number }): Promise<{ data: any[] }>
+  }
 }
 
 export async function fetchPRContext(
   owner: string,
   repo: string,
   prNumber: number,
-  token?: string
+  token?: string,
+  client?: GitHubClient
 ): Promise<PRContext> {
-  const octokit = new Octokit({ auth: token })
+  const octokit = client ?? new Octokit({ auth: token })
 
   const [prRes, filesRes, commitsRes, reviewCommentsRes, reviewsRes] = await Promise.all([
     octokit.pulls.get({ owner, repo, pull_number: prNumber }),
@@ -39,37 +130,10 @@ export async function fetchPRContext(
 
   const pr = prRes.data
 
-  // Combine all diffs and truncate if needed
-  let totalDiff = filesRes.data.map(f => f.patch ?? '').join('\n')
-  totalDiff = truncateDiff(totalDiff)
-
-  // Re-distribute truncated diff back to files proportionally (simplified: just include patches as-is up to limit)
-  const files = filesRes.data.map(f => ({
-    filename: f.filename,
-    status: f.status,
-    additions: f.additions,
-    deletions: f.deletions,
-    patch: f.patch,
-  }))
-
-  const commits = commitsRes.data.map(c => ({
-    sha: c.sha,
-    message: c.commit.message,
-    author: c.commit.author?.name ?? c.author?.login ?? 'unknown',
-  }))
-
-  const reviewComments = reviewCommentsRes.data.map(c => ({
-    author: c.user?.login ?? 'unknown',
-    body: c.body,
-    path: c.path,
-    line: c.line ?? null,
-  }))
-
-  const reviews = reviewsRes.data.map(r => ({
-    author: r.user?.login ?? 'unknown',
-    state: r.state,
-    body: r.body ?? '',
-  }))
+  const files = extractFiles(filesRes.data)
+  const commits = extractCommits(commitsRes.data)
+  const reviewComments = filterReviewComments(reviewCommentsRes.data)
+  const reviews = extractReviews(reviewsRes.data)
 
   return {
     title: pr.title,

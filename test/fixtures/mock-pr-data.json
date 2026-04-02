@@ -1,0 +1,72 @@
+{
+  "pr": {
+    "title": "Fix auth token refresh flow",
+    "body": "Improves token handling and retries refresh failures.",
+    "number": 42,
+    "html_url": "https://github.com/acme/pr-narrative/pull/42",
+    "user": { "login": "alice" },
+    "base": { "ref": "main" },
+    "head": { "ref": "fix/auth-token" },
+    "merged_at": "2026-04-01T12:00:00Z"
+  },
+  "files": [
+    {
+      "filename": "src/auth.ts",
+      "status": "modified",
+      "additions": 24,
+      "deletions": 6,
+      "patch": "@@ -1,3 +1,3 @@\n- old token code\n+ new token code"
+    },
+    {
+      "filename": "src/session.ts",
+      "status": "added",
+      "additions": 12,
+      "deletions": 0,
+      "patch": "@@ -0,0 +1,2 @@\n+ export function refreshSession() {}"
+    }
+  ],
+  "commits": [
+    {
+      "sha": "abc123",
+      "commit": {
+        "message": "Fix token refresh\n\nHandle retry edge cases",
+        "author": { "name": "Alice Doe" }
+      },
+      "author": { "login": "alice" }
+    },
+    {
+      "sha": "def456",
+      "commit": {
+        "message": "Add session helper",
+        "author": { "name": "Bob Dev" }
+      },
+      "author": { "login": "bob" }
+    }
+  ],
+  "reviewComments": [
+    {
+      "user": { "login": "reviewer1" },
+      "body": "Please add coverage for token expiry.",
+      "path": "src/auth.ts",
+      "line": 17
+    },
+    {
+      "user": { "login": "reviewer2" },
+      "body": "   ",
+      "path": "src/session.ts",
+      "line": 3
+    }
+  ],
+  "reviews": [
+    {
+      "user": { "login": "reviewer1" },
+      "state": "APPROVED",
+      "body": "Looks good."
+    },
+    {
+      "user": { "login": "reviewer3" },
+      "state": "COMMENTED",
+      "body": "Consider documenting retry limits."
+    }
+  ]
+}

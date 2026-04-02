@@ -4,7 +4,7 @@ import { Command } from 'commander'
 import { execSync } from 'child_process'
 import { writeFile } from 'fs/promises'
 import { join } from 'path'
-import { loadConfig } from './config.js'
+import { resolveConfig, type Config } from './config.js'
 import { fetchPRContext } from './github.js'
 import { createProvider } from './llm.js'
 import { generateADR } from './adr.js'
@@ -37,7 +37,13 @@ program
     token?: string
   }) => {
     try {
-      const config = await loadConfig()
+      const config = await resolveConfig({
+        repo: opts.repo,
+        provider: opts.provider as Config['provider'],
+        model: opts.model,
+        out: opts.out,
+        githubToken: opts.token,
+      })
 
       // Resolve repo
       let repo = opts.repo ?? config.repo
@@ -66,10 +72,10 @@ program
         process.exit(1)
       }
 
-      const token = opts.token ?? config.githubToken ?? process.env['GITHUB_TOKEN']
-      const provider = opts.provider ?? config.provider ?? 'openai'
-      const model = opts.model ?? config.model
-      const outDir = opts.out ?? config.out ?? 'docs/decisions/'
+      const token = config.githubToken ?? process.env['GITHUB_TOKEN']
+      const provider = config.provider ?? 'openai'
+      const model = config.model
+      const outDir = config.out ?? 'docs/decisions/'
 
       log.step(`🔍 Fetching PR #${opts.pr}...`)
       const ctx = await fetchPRContext(owner, repoName, opts.pr, token)

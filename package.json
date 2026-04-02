@@ -3,11 +3,17 @@
   "version": "0.1.0",
   "description": "Turn your PR history into ADRs automatically",
   "type": "module",
-  "bin": { "pr-narrative": "dist/index.js" },
-  "files": ["dist/", "README.md"],
+  "bin": {
+    "pr-narrative": "dist/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/index.ts",
+    "test": "node --import tsx/esm --test test/**/*.test.ts",
     "prepublishOnly": "tsc"
   },
   "dependencies": {

@@ -4,7 +4,7 @@ import { join } from 'path'
 import type { PRContext } from './github.js'
 import type { LLMProvider } from './llm.js'
 
-function slugify(title: string): string {
+export function slugify(title: string): string {
   return title
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, '')
@@ -14,7 +14,7 @@ function slugify(title: string): string {
     .slice(0, 80)
 }
 
-async function getNextADRNumber(outDir: string): Promise<string> {
+export async function getNextADRNumber(outDir: string): Promise<string> {
   if (!existsSync(outDir)) {
     return '0001'
   }
@@ -24,7 +24,7 @@ async function getNextADRNumber(outDir: string): Promise<string> {
   return String(num).padStart(4, '0')
 }
 
-function buildPrompt(ctx: PRContext): string {
+export function buildPrompt(ctx: PRContext): string {
   const filesSummary = ctx.files
     .map(f => `- ${f.filename} (${f.status}, +${f.additions}/-${f.deletions})`)
     .join('\n')
@@ -60,7 +60,7 @@ Generate a concise ADR following this structure:
 Keep each section to 2-4 sentences. Be specific and technical.`
 }
 
-function parseSection(text: string, section: string): string {
+export function parseSection(text: string, section: string): string {
   const headings = ['Context', 'Decision', 'Consequences', 'Implementation Notes']
   const idx = headings.indexOf(section)
   if (idx === -1) return ''
@@ -82,7 +82,7 @@ function parseSection(text: string, section: string): string {
   return ''
 }
 
-function buildADR(
+export function buildADR(
   number: string,
   ctx: PRContext,
   llmText: string,

@@ -10,9 +10,30 @@ export interface Config {
   githubToken?: string
 }
 
-export async function loadConfig(): Promise<Config> {
-  const configPath = join(process.cwd(), 'pr-narrative.config.json')
-  if (!existsSync(configPath)) return {}
+export const DEFAULT_CONFIG: Required<Pick<Config, 'provider' | 'out'>> = {
+  provider: 'openai',
+  out: 'docs/decisions/',
+}
+
+export async function loadConfig(cwd: string = process.cwd()): Promise<Config> {
+  const configPath = join(cwd, 'pr-narrative.config.json')
+  if (!existsSync(configPath)) return { ...DEFAULT_CONFIG }
   const raw = await readFile(configPath, 'utf-8')
-  return JSON.parse(raw) as Config
+  return {
+    ...DEFAULT_CONFIG,
+    ...(JSON.parse(raw) as Config),
+  }
+}
+
+export async function resolveConfig(
+  cliConfig: Config = {},
+  cwd: string = process.cwd()
+): Promise<Config> {
+  const fileConfig = await loadConfig(cwd)
+  return {
+    ...fileConfig,
+    ...Object.fromEntries(
+      Object.entries(cliConfig).filter(([, value]) => value !== undefined)
+    ),
+  }
 }
