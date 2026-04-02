@@ -1,0 +1,25 @@
+{
+  "name": "pr-narrative",
+  "version": "0.1.0",
+  "description": "Turn your PR history into ADRs automatically",
+  "type": "module",
+  "bin": { "pr-narrative": "dist/index.js" },
+  "files": ["dist/", "README.md"],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "prepublishOnly": "tsc"
+  },
+  "dependencies": {
+    "@octokit/rest": "^20.0.0",
+    "@anthropic-ai/sdk": "^0.20.0",
+    "openai": "^4.0.0",
+    "chalk": "^5.0.0",
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "tsx": "^4.0.0",
+    "@types/node": "^20.0.0"
+  }
+}
